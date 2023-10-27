@@ -1,1 +1,171 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
+contract TheBlockCapsule {
+
+    // Token Information
+    string public name = "The Block Capsule";
+    string public symbol = "TBC";
+    uint8 public decimals = 18;
+    uint256 public totalSupply = 500_000_000 * 10**uint256(decimals);
+
+    // Balances mapping
+    mapping (address => uint256) public balances;
+
+    // Owner address
+    address public owner;
+
+    // Pause status and time
+    bool public paused = false;
+    uint256 public pauseStartTime;
+
+    // Events for transfer, mint, burn
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Mint(address indexed to, uint256 value);
+    event Burn(address indexed from, uint256 value);
+    event Pause(bool status);
+    event Vesting(address indexed beneficiary, uint256 amount, uint256 vestingTime);
+
+    // Modifiers
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+
+    modifier whenNotPaused() {
+        require(!paused, "Contract is paused");
+        _;
+    }
+
+    modifier whenPaused() {
+        require(paused, "Contract is not paused");
+        _;
+    }
+
+    // Constructor - Initializes the contract
+    constructor() {
+        owner = msg.sender;
+        balances[owner] = totalSupply;
+    }
+
+    // Function to transfer tokens
+    function transfer(address recipient, uint256 amount) public whenNotPaused {
+        _transfer(msg.sender, recipient, amount);
+    }
+
+    // Internal function for transferring tokens
+    function _transfer(address from, address to, uint256 amount) internal {
+        require(to != address(0), "Invalid recipient address");
+        require(balances[from] >= amount, "Insufficient balance");
+
+        balances[from] -= amount;
+        balances[to] += amount;
+
+        emit Transfer(from, to, amount);
+    }
+
+    // Function to mint new tokens
+    function mint(address recipient, uint256 amount) public onlyOwner whenNotPaused {
+        require(recipient != address(0), "Invalid recipient address");
+
+        totalSupply += amount;
+        balances[recipient] += amount;
+
+        emit Mint(recipient, amount);
+        emit Transfer(address(0), recipient, amount);
+    }
+
+    // Function to burn tokens
+    function burn(uint256 amount) public whenNotPaused {
+        _burn(msg.sender, amount);
+    }
+
+    // Internal function for burning tokens
+    function _burn(address from, uint256 amount) internal {
+        require(balances[from] >= amount, "Insufficient balance");
+
+        balances[from] -= amount;
+        totalSupply -= amount;
+
+        emit Burn(from, amount);
+        emit Transfer(from, address(0), amount);
+    }
+
+    // Function to pause the contract
+    function pause() public onlyOwner whenNotPaused {
+        paused = true;
+        pauseStartTime = block.timestamp;
+
+        emit Pause(true);
+    }
+
+    // Function to unpause the contract
+    function unpause() public onlyOwner whenPaused {
+        paused = false;
+
+        emit Pause(false);
+    }
+
+    // Function to lock tokens for vesting
+    function lockTokens(address beneficiary, uint256 amount, uint256 vestingTime) public onlyOwner whenNotPaused {
+        require(beneficiary != address(0), "Invalid beneficiary address");
+
+        _transfer(msg.sender, address(this), amount);
+
+        emit Vesting(beneficiary, amount, vestingTime);
+    }
+
+    // Function to release vested tokens
+    function releaseVestedTokens(address beneficiary, uint256 amount) public onlyOwner whenNotPaused {
+        require(beneficiary != address(0), "Invalid beneficiary address");
+
+        require(block.timestamp >= pauseStartTime + amount, "Vesting period not completed");
+
+        _transfer(address(this), beneficiary, amount);
+    }
+
+    // Emergency stop mechanism
+    function emergencyStop() public onlyOwner {
+        paused = true;
+        pauseStartTime = block.timestamp;
+
+        // Additional emergency stop actions can be added here
+
+        emit Pause(true);
+    }
+
+    // Gas optimization: External functions that do not write to state are set as view
+    function balanceOf(address account) public view returns (uint256) {
+        return balances[account];
+    }
+
+    // Input validation for mint and lockTokens functions
+    modifier validInput(uint256 amount) {
+        require(amount > 0, "Amount must be greater than zero");
+        _;
+    }
+
+    function mintWithValidation(address recipient, uint256 amount) public validInput(amount) {
+        mint(recipient, amount);
+    }
+
+    function lockTokensWithValidation(address beneficiary, uint256 amount, uint256 vestingTime) public validInput(amount) {
+        lockTokens(beneficiary, amount, vestingTime);
+    }
+
+    // Automated testing functions (for testing purposes)
+    function setBalance(address account, uint256 amount) public onlyOwner {
+        balances[account] = amount;
+    }
+
+    function setPaused(bool status) public onlyOwner {
+        paused = status;
+    }
+}
+
+
+
+/* 
+COMMENTS: Please thoroughly test this contract on a testnet before deploying it in a production environment.
+Additionally, consider seeking a professional audit for critical projects. 
+*/
